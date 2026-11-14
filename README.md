@@ -1,87 +1,36 @@
 # Market Data Collector
 
-A resilient crypto market data collection service designed to poll public exchange endpoints, normalize payload records into consistent domain schemas, and provide structured observability and error handling.
+Read-only service that collects crypto market data from the CoinGecko public API
+and normalizes it into a standard schema. (Day 1: config, client, normalizer, logging, tests.)
 
-## Features Built (Day 1 WIP)
+## Setup
 
-- **Configuration Management (`app/config.py`)**:
-  - Environment-based settings powered by `python-dotenv`.
-  - Type-safe, validated, and immutable `Settings` dataclass.
-  - Safe representation hiding sensitive fields (`db_url`).
-- **Data Models (`app/models.py`)**:
-  - Strongly typed `MarketRecord` schema representing coin snapshots.
-  - Formatted serialization (`to_dict`) with ISO 8601 UTC timestamps.
-- **CoinGecko Integration (`app/clients/coingecko.py`)**:
-  - Public REST client fetching market snapshots in batch.
-  - Round-trip latency tracking (`api_latency_ms`).
-  - Robust exception hierarchy handling network timeouts, rate limits, and invalid formats.
-- **Data Normalizer (`app/services/normalizer.py`)**:
-  - Maps external exchange payloads to standard domain models (`MarketRecord`).
-  - Calculates spreads and spread percentages.
-  - Validates required fields and logs missing requested pairs.
-- **Structured Logging (`app/logging_config.py`)**:
-  - Consistent ISO-UTC timestamped key-value log formatter.
-  - Dynamic attachment of structured context (`symbol`, `api_latency_ms`).
-- **Unit Test Suite (`tests/`)**:
-  - 100% passing pytest suite covering configuration parsing, normalization, spread math, logging formatters, and mocked CoinGecko API client interactions.
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    cp .env.example .env
 
-## Project Structure
+## Configuration (.env)
 
-```text
-market-data-collector/
-├── app/
-│   ├── clients/
-│   │   ├── __init__.py
-│   │   └── coingecko.py       # CoinGecko REST client
-│   ├── services/
-│   │   ├── __init__.py
-│   │   └── normalizer.py      # Normalization and spread computation
-│   ├── __init__.py
-│   ├── config.py              # Settings and environment validation
-│   ├── logging_config.py      # Structured key-value logging
-│   └── models.py              # Domain dataclasses (MarketRecord)
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py            # Test configurations
-│   ├── test_coingecko.py      # Client tests (mocked HTTP)
-│   ├── test_config.py         # Config validation tests
-│   ├── test_logging.py        # Key-value formatter tests
-│   └── test_normalizer.py     # Normalization & spread tests
-├── .env.example               # Environment variables template
-├── .gitignore
-├── requirements.txt
-└── README.md
-```
+| Variable | Default | Notes |
+|---|---|---|
+| PAIRS | bitcoin,ethereum,solana | CoinGecko coin ids |
+| POLL_INTERVAL_SECONDS | 60 | integer, 1-86400 |
+| DB_URL | (required) | not used until Day 2 |
+| LOG_LEVEL | info | debug/info/warning/error/critical |
+| PORT | 8000 | 1-65535 |
 
-## Getting Started
+Invalid or missing settings raise ConfigError listing every problem.
 
-### 1. Environment Setup
+## Run tests
 
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+    pytest -v
 
-### 2. Configuration
+Tests use mocks and make no live API calls.
 
-Copy the example environment file and configure variables as needed:
+## Data notes
 
-```bash
-cp .env.example .env
-```
-
-Available configuration options:
-- `DB_URL`: PostgreSQL connection string (required).
-- `PAIRS`: Comma-separated CoinGecko coin identifiers (default: `bitcoin,ethereum,solana`).
-- `POLL_INTERVAL_SECONDS`: Interval in seconds between market polls (default: `60`).
-- `LOG_LEVEL`: Log level (`debug`, `info`, `warning`, `error`, `critical`) (default: `info`).
-- `PORT`: Service port (default: `8000`).
-
-### 3. Running Unit Tests
-
-Run test suite with pytest:
-
-```bash
-pytest -v
-```
+- Source endpoint: /coins/markets (one batched request).
+- CoinGecko's public API gives no bid/ask prices, so bid, ask, spread and
+  spread_pct are null. The formulas are implemented and tested for when they exist.
+- volume_24h and price_change_24h_pct are null if CoinGecko sends null.
