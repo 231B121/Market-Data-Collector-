@@ -52,6 +52,8 @@ def normalize_market_item(
             f"Missing or invalid 'current_price' for {raw_symbol!r}"
         )
 
+    bid = _to_float(bid)
+    ask = _to_float(ask)
     spread, spread_pct = calculate_spread(bid, ask)
 
     return MarketRecord(
