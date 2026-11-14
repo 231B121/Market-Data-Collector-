@@ -14,7 +14,15 @@ logger = logging.getLogger(__name__)
 
 
 class CoinGeckoError(Exception):
-    """Raised when a CoinGecko request fails or returns unusable data."""
+    """Raised when a CoinGecko request fails or returns unusable data.
+
+    retryable is True for temporary failures (timeouts, network errors,
+    HTTP 429 and 5xx) and False for errors that retrying cannot fix.
+    """
+
+    def __init__(self, message: str, retryable: bool = False) -> None:
+        super().__init__(message)
+        self.retryable = retryable
 
 
 @dataclass(frozen=True)
@@ -53,13 +61,17 @@ class CoinGeckoClient:
             response.raise_for_status()
             data = response.json()
         except httpx.TimeoutException as exc:
-            raise CoinGeckoError(f"Request timed out after {self._timeout}s") from exc
-        except httpx.HTTPStatusError as exc:
             raise CoinGeckoError(
-                f"CoinGecko returned HTTP {exc.response.status_code}"
+                f"Request timed out after {self._timeout}s", retryable=True
+            ) from exc
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            raise CoinGeckoError(
+                f"CoinGecko returned HTTP {status}",
+                retryable=status == 429 or status >= 500,
             ) from exc
         except httpx.RequestError as exc:
-            raise CoinGeckoError(f"Network error: {exc}") from exc
+            raise CoinGeckoError(f"Network error: {exc}", retryable=True) from exc
         except ValueError as exc:
             raise CoinGeckoError("Response was not valid JSON") from exc
 
